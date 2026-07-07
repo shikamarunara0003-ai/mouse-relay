@@ -15,6 +15,7 @@ para opciones de despliegue (ngrok, Render, Railway, etc.)
 import asyncio
 import json
 import logging
+import os
 
 import websockets
 
@@ -75,7 +76,7 @@ async def _safe_send(viewer, message, stale_set):
 
 
 async def main():
-    port = 8765
+    port = int(os.environ.get("PORT", 8765))
     async with websockets.serve(handler, "0.0.0.0", port, ping_interval=20, ping_timeout=20):
         log.info("Servidor relay escuchando en el puerto %d", port)
         await asyncio.Future()  # correr para siempre
