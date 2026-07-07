@@ -22,6 +22,11 @@ import websockets
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("relay")
 
+# Contraseña requerida para conectarse como HOST.
+# Configúrala en Render como variable de entorno "HOST_PASSWORD" para no
+# dejarla escrita en el código público. Si no la configuras, usa "0328".
+HOST_PASSWORD = os.environ.get("HOST_PASSWORD", "0328")
+
 HOST_CONN = None          # conexión websocket del host activo
 VIEWERS: set = set()      # conexiones websocket de los viewers
 
@@ -41,14 +46,20 @@ async def handler(websocket):
             if msg_type == "register":
                 role = data.get("role")
                 if role == "host":
+                    if data.get("password") != HOST_PASSWORD:
+                        log.warning("Intento de host con contraseña incorrecta desde %s", websocket.remote_address)
+                        await websocket.send(json.dumps({"type": "error", "message": "Contraseña incorrecta"}))
+                        await websocket.close()
+                        return
                     HOST_CONN = websocket
                     log.info("Host conectado desde %s", websocket.remote_address)
+                    await websocket.send(json.dumps({"type": "ok"}))
                 elif role == "viewer":
                     VIEWERS.add(websocket)
                     log.info("Viewer conectado (%d total)", len(VIEWERS))
 
-            elif msg_type == "pos" and websocket is HOST_CONN:
-                # Reenviar la posición a todos los viewers conectados
+            elif msg_type in ("pos", "control") and websocket is HOST_CONN:
+                # Reenviar la posición o el aviso de pausa/reanudar a todos los viewers
                 if VIEWERS:
                     stale = set()
                     send_tasks = []
